@@ -1,4 +1,4 @@
-name: Build
+name: Build mod
 
 on:
   push:
@@ -10,26 +10,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Авто-распаковка: любой .zip в корне репозитория
-      - name: Unpack project zip
+      - name: Unpack zip (if present) and find project
         run: |
-          shopt -s nullglob
-          for z in *.zip; do
-            echo "Unpacking $z"
-            unzip -o -q "$z" -d .
-          done
-          GRADLE_FILE=$(find . -name build.gradle -not -path './.git/*' | head -n 1)
-          if [ -z "$GRADLE_FILE" ]; then echo "build.gradle не найден"; exit 1; fi
-          echo "PROJECT_DIR=$(dirname "$GRADLE_FILE")" >> "$GITHUB_ENV"
+          set -e
+          ZIP=$(find . -maxdepth 1 -name '*.zip' | head -n1)
+          if [ -n "$ZIP" ]; then
+            echo "Unpacking $ZIP"
+            mkdir -p _src
+            unzip -q -o "$ZIP" -d _src
+            ROOT=_src
+          else
+            ROOT=.
+          fi
+          BG=$(find "$ROOT" -maxdepth 3 -name build.gradle -not -path '*/.git/*' | head -n1)
+          if [ -z "$BG" ]; then echo "build.gradle not found"; exit 1; fi
+          echo "PROJECT_DIR=$(dirname "$BG")" >> "$GITHUB_ENV"
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 11
+          java-version: '17'
 
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: 7.3.3
+          gradle-version: '7.6.4'
 
       - name: Build
         working-directory: ${{ env.PROJECT_DIR }}
@@ -37,8 +41,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: mclient-jar
-          path: |
-            ${{ env.PROJECT_DIR }}/build/libs/*.jar
-            !${{ env.PROJECT_DIR }}/build/libs/*-sources.jar
-            !${{ env.PROJECT_DIR }}/build/libs/*-dev.jar
+          name: vclient-mod
+          path: ${{ env.PROJECT_DIR }}/build/libs/*.jar
