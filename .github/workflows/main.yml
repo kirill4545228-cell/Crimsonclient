@@ -1,0 +1,44 @@
+name: Build
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Авто-распаковка: любой .zip в корне репозитория
+      - name: Unpack project zip
+        run: |
+          shopt -s nullglob
+          for z in *.zip; do
+            echo "Unpacking $z"
+            unzip -o -q "$z" -d .
+          done
+          GRADLE_FILE=$(find . -name build.gradle -not -path './.git/*' | head -n 1)
+          if [ -z "$GRADLE_FILE" ]; then echo "build.gradle не найден"; exit 1; fi
+          echo "PROJECT_DIR=$(dirname "$GRADLE_FILE")" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 11
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 7.3.3
+
+      - name: Build
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle build --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mclient-jar
+          path: |
+            ${{ env.PROJECT_DIR }}/build/libs/*.jar
+            !${{ env.PROJECT_DIR }}/build/libs/*-sources.jar
+            !${{ env.PROJECT_DIR }}/build/libs/*-dev.jar
